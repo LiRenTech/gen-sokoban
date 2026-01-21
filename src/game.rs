@@ -1,4 +1,6 @@
-use std::io::{self, Write};
+use std::io::{self, Write, BufRead, BufReader};
+use std::fs::File;
+use std::path::Path;
 use crossterm::{
     cursor::MoveTo,
     execute,
@@ -45,52 +47,30 @@ impl Game {
         }
     }
 
-    // 加载关卡
+    // 从文件加载关卡
     pub fn load_level(level: usize) -> (Vec<Vec<Tile>>, (usize, usize)) {
-        let levels = vec![
-            // 关卡 1 - 简单
-            vec![
-                "#######",
-                "#.X...#",
-                "#.@...#",
-                "#.$...#",
-                "#.....#",
-                "#######",
-            ],
-            // 关卡 2 - 中等
-            vec![
-                "########",
-                "#......#",
-                "#.X.X..#",
-                "#.@....#",
-                "#.$.$..#",
-                "#......#",
-                "########",
-            ],
-            // 关卡 3 - 困难
-            vec![
-                "########",
-                "#......#",
-                "#.X.X..#",
-                "#......#",
-                "#.@....#",
-                "#.$.$..#",
-                "#......#",
-                "########",
-            ],
-        ];
+        let level_path = format!("levels/level_{}.txt", level);
+        let path = Path::new(&level_path);
 
-        if level > levels.len() {
-            return Self::load_level(1);
+        // 如果文件不存在，尝试加载关卡1
+        if !path.exists() {
+            if level != 1 {
+                return Self::load_level(1);
+            } else {
+                panic!("无法找到关卡文件: {}", level_path);
+            }
         }
 
-        let level_data = &levels[level - 1];
+        let file = File::open(path).expect(&format!("无法打开关卡文件: {}", level_path));
+        let reader = BufReader::new(file);
+
         let mut map = Vec::new();
         let mut player_pos = (0, 0);
 
-        for (y, row) in level_data.iter().enumerate() {
+        for (y, line) in reader.lines().enumerate() {
+            let line = line.expect("读取关卡文件行失败");
             let mut map_row = Vec::new();
-            for (x, ch) in row.chars().enumerate() {
+            for (x, ch) in line.chars().enumerate() {
                 let tile = match ch {
                     '#' => Tile::Wall,
                     '.' => Tile::Floor,
