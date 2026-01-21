@@ -1,6 +1,9 @@
 mod game;
+mod solver;
 
 use std::process;
+use std::time::Instant;
+use std::io::{self, Write};
 use game::{Game, Direction};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
@@ -8,14 +11,76 @@ use crossterm::{
 };
 
 fn main() {
+    // 获取所有关卡
+    let level_files = Game::get_all_levels();
+    
+    if level_files.is_empty() {
+        println!("错误: 没有找到任何关卡文件！请在 levels/ 目录下添加 .txt 关卡文件。");
+        return;
+    }
+
+    println!("🎮 推箱子游戏");
+    println!("═══════════════════════════════════════════════════");
+    println!("正在检测所有关卡是否可解...\n");
+
+    // 检测所有关卡的可解性
+    let mut level_results: Vec<(String, bool, u128)> = Vec::new();
+    
+    for level_path in &level_files {
+        let (map, player_pos) = Game::load_level_from_path(level_path);
+        
+        let start = Instant::now();
+        let solvable = solver::is_solvable(&map, player_pos);
+        let duration = start.elapsed().as_millis();
+        
+        let level_name = std::path::Path::new(level_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        
+        level_results.push((level_name, solvable, duration));
+    }
+
+    // 打印结果列表
+    println!("┌─────────────────────────────────────────────────┐");
+    println!("│  关卡名称              │ 状态   │ 检测耗时      │");
+    println!("├─────────────────────────────────────────────────┤");
+    
+    for (name, solvable, duration) in &level_results {
+        let status = if *solvable { "✅ 可解" } else { "❌ 不可解" };
+        println!("│  {:<20} │ {} │ {:>8} ms   │", name, status, duration);
+    }
+    
+    println!("└─────────────────────────────────────────────────┘");
+    println!("\n共 {} 个关卡", level_files.len());
+    println!("\n按任意键开始游戏，按 'q' 退出...");
+    io::stdout().flush().unwrap();
+
     // 启用原始模式
     enable_raw_mode().unwrap();
 
-    let mut current_level = 1;
-    let max_level = 3;
+    // 等待用户确认开始
+    if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
+        if let KeyCode::Char('q') = code {
+            disable_raw_mode().unwrap();
+            println!("\r\n游戏退出！");
+            process::exit(0);
+        }
+    }
+
+    let max_level = level_files.len();
+    let mut current_level = 0;
 
     loop {
-        let mut game = Game::new(current_level);
+        if current_level >= max_level {
+            disable_raw_mode().unwrap();
+            println!("\r\n🎊 恭喜！你完成了所有关卡！");
+            process::exit(0);
+        }
+
+        let level_path = &level_files[current_level];
+        let mut game = Game::new(current_level + 1, level_path);
         game.render();
 
         loop {
@@ -28,11 +93,11 @@ fn main() {
                     KeyCode::Char('d') | KeyCode::Right => game.move_player(Direction::Right),
                     KeyCode::Char('q') => {
                         disable_raw_mode().unwrap();
-                        println!("游戏退出！");
+                        println!("\r\n游戏退出！");
                         process::exit(0);
                     }
                     KeyCode::Char('r') => {
-                        game.reset();
+                        game.reset(level_path);
                         true
                     }
                     _ => false,
@@ -42,24 +107,19 @@ fn main() {
                     game.render();
 
                     if game.is_win() {
-                        print!("\r\n🎉 恭喜！你完成了关卡 {}！用了 {} 步。\r\n", current_level, game.moves);
+                        print!("\r\n🎉 恭喜！你完成了 {}！用了 {} 步。\r\n", game.level_name, game.moves);
                         print!("按任意键继续下一关，或按 'q' 退出...\r\n");
 
                         // 等待按键
                         if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
                             if let KeyCode::Char('q') = code {
                                 disable_raw_mode().unwrap();
-                                println!("游戏退出！");
+                                println!("\r\n游戏退出！");
                                 process::exit(0);
                             }
                         }
 
                         current_level += 1;
-                        if current_level > max_level {
-                            disable_raw_mode().unwrap();
-                            println!("\n🎊 恭喜！你完成了所有关卡！");
-                            process::exit(0);
-                        }
                         break; // 进入下一关
                     }
                 }

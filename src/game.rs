@@ -1,5 +1,5 @@
 use std::io::{self, Write, BufRead, BufReader};
-use std::fs::File;
+use std::fs::{self, File};
 use std::path::Path;
 use crossterm::{
     cursor::MoveTo,
@@ -30,35 +30,60 @@ pub enum Direction {
 
 // 游戏状态
 pub struct Game {
-    pub level: usize,
+    pub level_index: usize,
+    pub level_name: String,
     pub map: Vec<Vec<Tile>>,
     pub player_pos: (usize, usize),
     pub moves: u32,
 }
 
 impl Game {
-    pub fn new(level: usize) -> Self {
-        let (map, player_pos) = Self::load_level(level);
+    pub fn new(level_index: usize, level_path: &str) -> Self {
+        let (map, player_pos) = Self::load_level_from_path(level_path);
+        let level_name = Path::new(level_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
         Game {
-            level,
+            level_index,
+            level_name,
             map,
             player_pos,
             moves: 0,
         }
     }
 
-    // 从文件加载关卡
-    pub fn load_level(level: usize) -> (Vec<Vec<Tile>>, (usize, usize)) {
-        let level_path = format!("levels/level_{}.txt", level);
-        let path = Path::new(&level_path);
+    /// 获取 levels 目录下所有关卡文件，按字典序排序
+    pub fn get_all_levels() -> Vec<String> {
+        let levels_dir = Path::new("levels");
+        if !levels_dir.exists() {
+            return Vec::new();
+        }
 
-        // 如果文件不存在，尝试加载关卡1
+        let mut level_files: Vec<String> = fs::read_dir(levels_dir)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let path = entry.path();
+                if path.extension()?.to_str()? == "txt" {
+                    Some(path.to_str()?.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        level_files.sort();
+        level_files
+    }
+
+    /// 从文件路径加载关卡
+    pub fn load_level_from_path(level_path: &str) -> (Vec<Vec<Tile>>, (usize, usize)) {
+        let path = Path::new(level_path);
+
         if !path.exists() {
-            if level != 1 {
-                return Self::load_level(1);
-            } else {
-                panic!("无法找到关卡文件: {}", level_path);
-            }
+            panic!("无法找到关卡文件: {}", level_path);
         }
 
         let file = File::open(path).expect(&format!("无法打开关卡文件: {}", level_path));
@@ -103,7 +128,7 @@ impl Game {
             MoveTo(0, 0)
         ).unwrap();
         
-        print!("推箱子游戏 - 关卡 {} | 步数: {}\r\n", self.level, self.moves);
+        print!("推箱子游戏 - {} | 步数: {}\r\n", self.level_name, self.moves);
         print!("使用 WASD 或方向键移动，按 'q' 退出，按 'r' 重置\r\n");
         print!("\r\n");
 
@@ -223,8 +248,8 @@ impl Game {
     }
 
     // 重置关卡
-    pub fn reset(&mut self) {
-        let (map, player_pos) = Self::load_level(self.level);
+    pub fn reset(&mut self, level_path: &str) {
+        let (map, player_pos) = Self::load_level_from_path(level_path);
         self.map = map;
         self.player_pos = player_pos;
         self.moves = 0;
