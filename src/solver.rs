@@ -1,8 +1,14 @@
 use std::collections::{HashSet, VecDeque};
 use crate::game::Tile;
 
-/// 检查关卡是否可解（使用 BFS 搜索）
-pub fn is_solvable(map: &[Vec<Tile>], player_pos: (usize, usize)) -> bool {
+/// 解题结果
+pub struct SolveResult {
+    pub solvable: bool,
+    pub min_steps: Option<u32>,
+}
+
+/// 检查关卡是否可解，并返回最小步数（使用 BFS 搜索）
+pub fn solve(map: &[Vec<Tile>], player_pos: (usize, usize)) -> SolveResult {
     // 提取初始状态：所有箱子位置和目标位置
     let mut initial_boxes: Vec<(usize, usize)> = Vec::new();
     let mut targets: HashSet<(usize, usize)> = HashSet::new();
@@ -23,12 +29,12 @@ pub fn is_solvable(map: &[Vec<Tile>], player_pos: (usize, usize)) -> bool {
     
     initial_boxes.sort();
     
-    // 状态：(玩家位置, 箱子位置列表)
-    let initial_state = (player_pos, initial_boxes);
+    // 状态：(玩家位置, 箱子位置列表, 步数)
+    let initial_state = (player_pos, initial_boxes, 0u32);
     
     // BFS
     let mut visited: HashSet<String> = HashSet::new();
-    let mut queue: VecDeque<((usize, usize), Vec<(usize, usize)>)> = VecDeque::new();
+    let mut queue: VecDeque<((usize, usize), Vec<(usize, usize)>, u32)> = VecDeque::new();
     
     let state_key = get_state_key(&initial_state.0, &initial_state.1);
     visited.insert(state_key);
@@ -36,11 +42,14 @@ pub fn is_solvable(map: &[Vec<Tile>], player_pos: (usize, usize)) -> bool {
     
     let directions = [(0i32, -1i32), (0, 1), (-1, 0), (1, 0)];
     
-    while let Some((player_pos, boxes)) = queue.pop_front() {
+    while let Some((player_pos, boxes, steps)) = queue.pop_front() {
         // 检查是否所有箱子都在目标上
         let all_on_target = boxes.iter().all(|b| targets.contains(b));
         if all_on_target {
-            return true;
+            return SolveResult {
+                solvable: true,
+                min_steps: Some(steps),
+            };
         }
         
         let boxes_set: HashSet<(usize, usize)> = boxes.iter().cloned().collect();
@@ -101,7 +110,7 @@ pub fn is_solvable(map: &[Vec<Tile>], player_pos: (usize, usize)) -> bool {
                 
                 if !visited.contains(&state_key) {
                     visited.insert(state_key);
-                    queue.push_back((new_player, new_boxes));
+                    queue.push_back((new_player, new_boxes, steps + 1));
                 }
             } else {
                 // 玩家移动到空位
@@ -110,13 +119,16 @@ pub fn is_solvable(map: &[Vec<Tile>], player_pos: (usize, usize)) -> bool {
                 
                 if !visited.contains(&state_key) {
                     visited.insert(state_key);
-                    queue.push_back((new_player, boxes.clone()));
+                    queue.push_back((new_player, boxes.clone(), steps + 1));
                 }
             }
         }
     }
     
-    false
+    SolveResult {
+        solvable: false,
+        min_steps: None,
+    }
 }
 
 /// 生成状态唯一标识
