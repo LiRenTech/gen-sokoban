@@ -3,7 +3,7 @@ mod game;
 use std::process;
 use game::{Game, Direction};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 
@@ -20,7 +20,7 @@ fn main() {
 
         loop {
             // 读取按键事件
-            if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
+            if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
                 let moved = match code {
                     KeyCode::Char('w') | KeyCode::Up => game.move_player(Direction::Up),
                     KeyCode::Char('s') | KeyCode::Down => game.move_player(Direction::Down),
@@ -46,7 +46,7 @@ fn main() {
                         print!("按任意键继续下一关，或按 'q' 退出...\r\n");
 
                         // 等待按键
-                        if let Ok(Event::Key(KeyEvent { code, .. })) = event::read() {
+                        if let Ok(Event::Key(KeyEvent { code, kind: KeyEventKind::Press, .. })) = event::read() {
                             if let KeyCode::Char('q') = code {
                                 disable_raw_mode().unwrap();
                                 println!("游戏退出！");
